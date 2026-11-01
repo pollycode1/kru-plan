@@ -1,8 +1,7 @@
 name: Deploy web app (GitHub Pages)
 
+# เว็บแอพสำรอง (PWA) — กดรันเองจากแท็บ Actions หลังเปิด GitHub Pages แล้ว
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
 
 permissions:

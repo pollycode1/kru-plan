@@ -1,0 +1,33 @@
+name: Build iOS app
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ios:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.27.1
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - run: flutter build ios --release --no-codesign
+      # แพ็กเป็น .ipa (ยังไม่เซ็น) สำหรับลงด้วย Sideloadly / AltStore
+      - name: Package unsigned IPA
+        run: |
+          mkdir -p dist/Payload
+          cp -R build/ios/iphoneos/Runner.app dist/Payload/
+          cd dist && zip -qry kru_plan-unsigned.ipa Payload
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kru_plan-ios
+          path: dist/kru_plan-unsigned.ipa
+          retention-days: 30
