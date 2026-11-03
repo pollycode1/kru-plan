@@ -1,0 +1,59 @@
+name: Build Android app
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.27.1
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      # คีย์เซ็นแอพจาก secrets (ถ้าไม่มี จะเซ็นด้วยคีย์ชั่วคราว ซึ่งติดตั้งอัปเดตทับกันไม่ได้)
+      - name: Restore signing key
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [ -n "$KEYSTORE_B64" ] && [ -n "$KEY_PASSWORD" ]; then
+            echo "$KEYSTORE_B64" | base64 -d > android/app/kru-plan-release.jks
+            printf "storePassword=%s\nkeyPassword=%s\nkeyAlias=kruplan\nstoreFile=kru-plan-release.jks\n" \
+              "$KEY_PASSWORD" "$KEY_PASSWORD" > android/key.properties
+            echo "SIGNED=release" >> "$GITHUB_ENV"
+          else
+            echo "::warning::ยังไม่ได้ตั้ง secrets ANDROID_KEYSTORE_BASE64 / ANDROID_KEY_PASSWORD — ใช้คีย์ชั่วคราว"
+            echo "SIGNED=temporary" >> "$GITHUB_ENV"
+          fi
+      # build-number เพิ่มทุกครั้ง เพื่อให้ติดตั้งอัปเดตทับของเดิมได้ (ข้อมูลไม่หาย)
+      - run: flutter build apk --release --build-number=${{ github.run_number }}
+      - run: cp build/app/outputs/flutter-apk/app-release.apk kru-plan.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kru-plan-android
+          path: kru-plan.apk
+      # ลิงก์ดาวน์โหลดถาวร ไม่ต้องล็อกอิน (เฉพาะเมื่อเซ็นด้วยคีย์จริง):
+      # https://github.com/pollycode1/kru-plan/releases/latest/download/kru-plan.apk
+      - if: env.SIGNED == 'release'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: android-latest
+          name: แผนสอน Android (ล่าสุด)
+          body: |
+            ดาวน์โหลด kru-plan.apk แล้วเปิดไฟล์บนแท็บเล็ต/มือถือ Android เพื่อติดตั้งหรืออัปเดต
+            build #${{ github.run_number }}
+          files: kru-plan.apk
+          make_latest: true
